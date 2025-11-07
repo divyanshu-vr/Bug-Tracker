@@ -55,7 +55,7 @@ async def create_bug(
         reportedBy: User ID who reported the bug
         priority: Bug priority level
         severity: Bug severity level
-        files: Optional list of file attachments
+        files: Optional list of image file attachments (List[UploadFile] | None). Each file should be an image in JPEG, PNG, or GIF format, up to 10MB per file. Non-image files will be rejected.
         
     Returns:
         Created bug data
@@ -81,15 +81,24 @@ async def create_bug(
             priority_enum = BugPriority(priority)
             severity_enum = BugSeverity(severity)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            valid_priorities = [p.value for p in BugPriority]
+            valid_severities = [s.value for s in BugSeverity]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid priority or severity value. "
+                    f"Received priority='{priority}', severity='{severity}'. "
+                    f"Valid priorities: {valid_priorities}. "
+                    f"Valid severities: {valid_severities}."
+                )
+            )
         
         # Upload attachments to Cloudinary
         attachment_urls = []
         if files:
             for file in files:
                 try:
-                    # Read file content
-                    file_content = await file.read()
+                    # Read file content (removed unused variable)
                     await file.seek(0)
                     
                     # Upload to Cloudinary
@@ -106,7 +115,7 @@ async def create_bug(
                     logger.error(f"Failed to upload file {file.filename}: {e}")
                     raise HTTPException(
                         status_code=500,
-                        detail=f"Failed to upload file: {file.filename}"
+                        detail=f"Failed to upload file: {file.filename}. Error: {str(e)}"
                     )
         
         # Create bug entity

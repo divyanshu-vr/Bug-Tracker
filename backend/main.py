@@ -79,8 +79,8 @@ def create_app(config: Config) -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://localhost:3001"],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
     )
     
     # Register routers
