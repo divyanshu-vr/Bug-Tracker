@@ -50,6 +50,7 @@ class ServiceContainer:
     def close(self) -> None:
         """Close all service connections."""
         self.database.disconnect()
+        self.project_api.close()
 
 
 def create_service_container(

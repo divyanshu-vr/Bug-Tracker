@@ -1,6 +1,6 @@
 """MongoDB connection service with connection pooling and error handling."""
 
-from typing import Optional, Protocol
+from typing import Optional
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from pymongo.database import Database
@@ -121,7 +121,8 @@ class MongoDBService(DatabaseService):
         if self._client:
             self._client.close()
             logger.info("MongoDB connection closed")
-
+        self._client = None
+        self._db = None
     @property
     def bugs(self) -> Collection:
         """Get bugs collection.

@@ -49,6 +49,11 @@ def create_app(config: Config) -> FastAPI:
             logger.info("All services initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
+            if services is not None:
+                try:
+                    services.close()
+                except Exception as cleanup_error:
+                    logger.error(f"Error during cleanup of services: {cleanup_error}")
             raise
         
         yield

@@ -3,8 +3,9 @@
 from .config import Config
 from .main import create_app
 
-# Load configuration from environment
-config = Config.from_env()
+if __name__ == "__main__":
+    # Load configuration from environment
+    config = Config.from_env()
 
-# Create application instance
-app = create_app(config)
+    # Create application instance
+    app = create_app(config)
