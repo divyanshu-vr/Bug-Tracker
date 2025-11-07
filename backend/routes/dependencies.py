@@ -3,6 +3,7 @@
 from typing import Annotated
 from fastapi import Depends, Request, HTTPException
 from bson import ObjectId
+from bson.errors import InvalidId
 
 from ..services import ServiceContainer
 
@@ -33,8 +34,11 @@ def validate_object_id(id_str: str) -> ObjectId:
     """
     try:
         return ObjectId(id_str)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ID format")
+    except InvalidId as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid ObjectId format: '{id_str}'. {str(e)}"
+        )
 
 
 # Type aliases for dependency injection

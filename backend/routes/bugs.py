@@ -93,13 +93,28 @@ async def create_bug(
                 )
             )
         
-        # Upload attachments to Cloudinary
+        # Upload attachments to Cloudinary with validation
         attachment_urls = []
         if files:
             for file in files:
                 try:
-                    # Read file content (removed unused variable)
-                    await file.seek(0)
+                    # Validate file before upload
+                    if not file.filename:
+                        raise HTTPException(status_code=400, detail="File must have a filename")
+                    
+                    # Get file size
+                    await file.seek(0, 2)  # Seek to end
+                    file_size = file.tell()
+                    await file.seek(0)  # Reset to beginning
+                    
+                    # Validate file using Cloudinary service validation
+                    is_valid, error_message = services.image_storage.validate_file(
+                        filename=file.filename,
+                        file_size=file_size
+                    )
+                    
+                    if not is_valid:
+                        raise HTTPException(status_code=400, detail=error_message)
                     
                     # Upload to Cloudinary
                     upload_result = await services.image_storage.upload_image(
@@ -109,6 +124,8 @@ async def create_bug(
                     )
                     attachment_urls.append(upload_result["url"])
                     
+                except HTTPException:
+                    raise
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
                 except Exception as e:
@@ -283,7 +300,7 @@ async def update_bug_status(
         
         # Tester-specific validation for closing bugs
         if new_status == BugStatus.CLOSED.value:
-            if user_role != "tester" and user_role != "admin":
+            if user_role not in ["tester", "admin"]:
                 raise HTTPException(
                     status_code=403,
                     detail="Only Testers can close bugs"
@@ -367,7 +384,7 @@ async def validate_bug(
         obj_id = validate_object_id(bug_id)
         
         # Check role authorization
-        if userRole.lower() != "tester" and userRole.lower() != "admin":
+        if userRole.lower() not in ["tester", "admin"]:
             raise HTTPException(
                 status_code=403,
                 detail="Only Testers can validate bugs"
