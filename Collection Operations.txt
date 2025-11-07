@@ -1,0 +1,73 @@
+token:
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aGlyZF9wYXJ0eV90b2tlbiI6ImV5SmhiR2NpT2lKU1V6STFOaUlzSW10cFpDSTZJbVZsWXpVek5HWmhOV0k0WTJGallUSXdNV05oT0dRd1ptWTVObUkxTkdNMU5qSXlNVEJrTVdVaUxDSjBlWEFpT2lKS1YxUWlmUS5leUpwYzNNaU9pSmhZMk52ZFc1MGN5NW5iMjluYkdVdVkyOXRJaXdpWVhwd0lqb2lPVGd6TURrME5qVTJOakV3TFRsdE5YRnJabTFrTUdZMVltYzBiWEUxTTJWbE9YVXhNalF5TW5RME1XeG5MbUZ3Y0hNdVoyOXZaMnhsZFhObGNtTnZiblJsYm5RdVkyOXRJaXdpWVhWa0lqb2lPVGd6TURrME5qVTJOakV3TFRsdE5YRnJabTFrTUdZMVltYzBiWEUxTTJWbE9YVXhNalF5TW5RME1XeG5MbUZ3Y0hNdVoyOXZaMnhsZFhObGNtTnZiblJsYm5RdVkyOXRJaXdpYzNWaUlqb2lNVEV5TURnd016TTROREU1TXpRMk9ETTNOemcxSWl3aVpXMWhhV3dpT2lKa1pXVnJjMmhwZEdnM09ESXdRR2R0WVdsc0xtTnZiU0lzSW1WdFlXbHNYM1psY21sbWFXVmtJanAwY25WbExDSmhkRjlvWVhOb0lqb2lPWGxTZHpCVmFteEhXbTk0U1c5bVNtaHlSRTl2WnlJc0ltbGhkQ0k2TVRjek9UTTBOVEU1T0N3aVpYaHdJam94TnpNNU16UTROems0ZlEuVXZEUWFmRUpSX1dDX2U2QlVWalZPZExxX2lXenBiaE11a1V0U1p2cHhKdTJZOEJ5ODgyMGx3SmJabEJVd25NVXlIbWMxeE5qNEtiUTQxNU4wYnJGMHZ5Ymlzd0tNejlQVUVUTmYzZjhtQmYxWHZwN0M3VE5lbE4tRE9rZTlfZk4xVTNQMnpJS1pOdl9adnN1cU9FdWpLV0ZSOFJ5ZzA0ZGZqQlRqZlBwelJPb3o5Ql9zZm1FUTc4VlhnYkEzajUwWkhjTUs0M0xhRU5VS3N3VDk5WlBuSDNCZTdVc0lCOGl2bWNPM1ItUm9GemlfRkx1ZjdGS2ltdGhqd25zeUVhOVR6WWlNa2pnTDJidVJ1bUg5YUlkTmJ3ekxBVHdiQnpVYm9OaVpqUmFwR1dhNHFRU0Uzc2VuWE5ncGdCQTdlQ1pTd1ZRWEpzOGJTU1NvYnQyamMzYnhBIiwic3ViIjoiNDg2ZjQ5NjgtODAzZC00NGViLWExNzctOTkzMGY3NTQxZDA3IiwiaXNzIjoiaHR0cHM6Ly93d3cuZHBvZC5pbyIsInJvb3RfYWNjb3VudF9pZCI6IjBhZWU2YmQ3LWVkNDItNDE4NC05YmFjLWNlMDQ2NjczN2FkYSIsInN1YnNjcmliZXJfaWQiOiI2NTUxZjYwNS0zOWNiLTQzNTEtOGVhMS1iMmE3YWYzMTc5ODUiLCJzdWJzY3JpcHRpb25faWQiOiJhNmE0OWNlMC0xMTIxLTQ1NWMtOTFjZC03OTU2ZWIwODkxZGQiLCJleHAiOjE3MzkzNDg4MDEsImFwcF9zdWJzY3JpYmVkIjpbIkFtZXlhIl0sInByb3ZpZGVyIjoiZ29vZ2xlIiwiYXBwX3JvbGUiOltdLCJhcHBfcGVybWlzc2lvbnMiOlsiQW1leWEiXX0.u1TuNl9txncc7y014kGVI0Cu2WK6zoZ-zcfAdXjNfvQ
+
+
+1. Create One Item
+
+Api: https://appflyte-backend.ameya.ai/0aee6bd7-ed42-4184-9bac-ce0466737ada/api/collection/0aee6bd7-ed42-4184-9bac-ce0466737ada/user/private/cm/v1/ameya_appflyte/ameya_tests
+Method: Post
+RequestBody:
+
+{
+    "collection_item": {
+        "name": "",
+        "description": "",
+        "created_at": "2024-12-19 13:22:17"
+      }	
+}
+
+
+
+2. Get All Items
+
+Api: https://appflyte-backend.ameya.ai/0aee6bd7-ed42-4184-9bac-ce0466737ada/api/collection/0aee6bd7-ed42-4184-9bac-ce0466737ada/user/private/cm/v1/ameya_appflyte/ameya_tests
+Method: GET
+
+
+
+3. Get By Item Id:
+
+Api: https://appflyte-backend.ameya.ai/0aee6bd7-ed42-4184-9bac-ce0466737ada/api/collection/0aee6bd7-ed42-4184-9bac-ce0466737ada/user/private/cm/v1/ameya_appflyte/ameya_test/item_id
+Method: Get
+item id : __auto_id__
+   
+
+
+4. Update Item:
+
+Api: https://appflyte-backend.ameya.ai/0aee6bd7-ed42-4184-9bac-ce0466737ada/api/collection/0aee6bd7-ed42-4184-9bac-ce0466737ada/user/private/cm/v1/ameya_appflyte/ameya_test/item_id
+Method: PUT
+item id : __auto_id__
+
+Request Body:
+{
+    "id": "item_id",
+    "fields": [
+        {
+            "path": "$.name",
+            "value": new value 
+       },
+	{
+            "path": "$.description",
+            "value": new value 
+       }
+       ,{
+            "path": "$.created_at",
+            "value": newvalue 
+       }
+    ]
+}
+
+
+
+5. Delete Item:
+
+Api: https://appflyte-backend.ameya.ai/0aee6bd7-ed42-4184-9bac-ce0466737ada/api/collection/0aee6bd7-ed42-4184-9bac-ce0466737ada/user/private/cm/v1/ameya_appflyte/ameya_test/item_id
+Method: Delete
+item id : __auto_id__
+
+
+
+
+
+

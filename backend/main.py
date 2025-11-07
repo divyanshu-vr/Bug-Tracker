@@ -7,7 +7,7 @@ import logging
 
 from .services import ServiceContainer, create_service_container
 from .config import Config
-from .routes import bugs
+from .routes import bugs, comments, projects, uploads
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,8 @@ def create_app(config: Config) -> FastAPI:
                 mongodb_database=config.mongodb_database,
                 appflyte_base_url=config.appflyte_base_url,
                 appflyte_api_key=config.appflyte_api_key,
+                collection_db_base_url=config.collection_db_base_url,
+                collection_db_api_key=config.collection_db_api_key,
                 cloudinary_cloud_name=config.cloudinary_cloud_name,
                 cloudinary_api_key=config.cloudinary_api_key,
                 cloudinary_api_secret=config.cloudinary_api_secret
@@ -85,6 +87,9 @@ def create_app(config: Config) -> FastAPI:
     
     # Register routers
     app.include_router(bugs.router)
+    app.include_router(comments.router)
+    app.include_router(projects.router)
+    app.include_router(uploads.router)
     
     @app.get("/")
     async def root():

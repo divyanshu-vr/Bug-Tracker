@@ -25,6 +25,10 @@ class Config:
     appflyte_base_url: str
     appflyte_api_key: str
 
+    # AppFlyte Collection DB Configuration
+    collection_db_base_url: str
+    collection_db_api_key: str
+
     # Cloudinary Configuration
     cloudinary_cloud_name: str
     cloudinary_api_key: str
@@ -48,6 +52,8 @@ class Config:
         mongodb_uri = os.getenv("MONGODB_URI", "")
         appflyte_base_url = os.getenv("APPFLYTE_BASE_URL", "")
         appflyte_api_key = os.getenv("APPFLYTE_API_KEY", "")
+        collection_db_base_url = os.getenv("COLLECTION_DB_BASE_URL", "")
+        collection_db_api_key = os.getenv("COLLECTION_DB_API_KEY", "")
         cloudinary_cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "")
         cloudinary_api_key = os.getenv("CLOUDINARY_API_KEY", "")
         cloudinary_api_secret = os.getenv("CLOUDINARY_API_SECRET", "")
@@ -57,6 +63,8 @@ class Config:
             "MONGODB_URI": mongodb_uri,
             "APPFLYTE_BASE_URL": appflyte_base_url,
             "APPFLYTE_API_KEY": appflyte_api_key,
+            "COLLECTION_DB_BASE_URL": collection_db_base_url,
+            "COLLECTION_DB_API_KEY": collection_db_api_key,
             "CLOUDINARY_CLOUD_NAME": cloudinary_cloud_name,
             "CLOUDINARY_API_KEY": cloudinary_api_key,
             "CLOUDINARY_API_SECRET": cloudinary_api_secret,
@@ -78,6 +86,8 @@ class Config:
             mongodb_database=mongodb_database,
             appflyte_base_url=appflyte_base_url,
             appflyte_api_key=appflyte_api_key,
+            collection_db_base_url=collection_db_base_url,
+            collection_db_api_key=collection_db_api_key,
             cloudinary_cloud_name=cloudinary_cloud_name,
             cloudinary_api_key=cloudinary_api_key,
             cloudinary_api_secret=cloudinary_api_secret,
