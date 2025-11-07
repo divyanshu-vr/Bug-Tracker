@@ -48,9 +48,24 @@ class ServiceContainer:
     image_storage: ImageStorageService
     
     async def close(self) -> None:
-        """Close all service connections."""
-        self.database.disconnect()
-        await self.project_api.close()
+        """Close all service connections.
+        
+        Ensures all resources are cleaned up even if individual cleanup operations fail.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Close database connection
+        try:
+            self.database.disconnect()
+        except Exception as e:
+            logger.error(f"Error closing database connection: {e}")
+        
+        # Close API client
+        try:
+            await self.project_api.close()
+        except Exception as e:
+            logger.error(f"Error closing API client: {e}")
 
 
 def create_service_container(
