@@ -154,12 +154,7 @@ class CloudinaryService(ImageStorageService):
             result = cloudinary.uploader.upload(
                 file,
                 folder=folder,
-                resource_type="image",
-                format="auto",
-                transformation=[
-                    {'quality': "auto:good"},
-                    {'fetch_format': "auto"}
-                ]
+                resource_type="image"
             )
             
             logger.info(f"Successfully uploaded image: {filename} -> {result['public_id']}")
