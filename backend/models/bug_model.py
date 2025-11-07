@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Type
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -67,8 +67,8 @@ class Bug(BaseModel):
     severity: BugSeverity
     attachments: List[str] = Field(default_factory=list)
     validated: bool = Field(default=False)
-    createdAt: datetime = Field(default_factory=datetime.utcnow)
-    updatedAt: datetime = Field(default_factory=datetime.utcnow)
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         populate_by_name = True
@@ -104,7 +104,7 @@ class Comment(BaseModel):
     bugId: str = Field(..., min_length=1)
     authorId: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1)
-    createdAt: datetime = Field(default_factory=datetime.utcnow)
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         populate_by_name = True
@@ -116,7 +116,7 @@ class Comment(BaseModel):
     @classmethod
     def validate_created_at(cls, v):
         """Ensure createdAt is not in the future"""
-        if v > datetime.utcnow():
+        if v > datetime.now(timezone.utc):
             raise ValueError("createdAt cannot be in the future")
         return v
 
