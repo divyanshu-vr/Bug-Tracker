@@ -55,23 +55,47 @@ async def create_comment(
                 detail=f"User with ID {comment_request.authorId} not found"
             )
         
+        # Get single timestamp for consistency
+        now = datetime.now(timezone.utc)
+        
         # Create comment entity
         comment = Comment(
             bugId=comment_request.bugId,
             authorId=comment_request.authorId,
             message=comment_request.message,
-            createdAt=datetime.now(timezone.utc)
+            createdAt=now
         )
         
         # Create comment in repository
         created_comment = await services.comment_repository.create(comment)
         
-        # Update parent bug timestamp
-        updated_at = datetime.now(timezone.utc)
-        await services.bug_repository.update_fields(
-            comment_request.bugId,
-            {"updatedAt": updated_at}
-        )
+        # Attempt to update parent bug timestamp with compensating rollback
+        try:
+            await services.bug_repository.update_fields(
+                comment_request.bugId,
+                {"updatedAt": now}
+            )
+        except Exception as bug_update_error:
+            # Rollback: Delete the created comment to maintain consistency
+            logger.error(
+                f"Failed to update bug timestamp after comment creation. "
+                f"Rolling back comment {created_comment.id}: {bug_update_error}"
+            )
+            try:
+                await services.collection_db.delete_item("comments", created_comment.id)
+                logger.info(f"Successfully rolled back comment {created_comment.id}")
+            except Exception as rollback_error:
+                logger.critical(
+                    f"CRITICAL: Failed to rollback comment {created_comment.id} "
+                    f"after bug update failure. Manual cleanup required. "
+                    f"Rollback error: {rollback_error}"
+                )
+            
+            # Re-raise with clear error message
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create comment: bug timestamp update failed"
+            )
         
         logger.info(
             f"Comment created: {created_comment.id} for bug {comment_request.bugId} "

@@ -52,17 +52,35 @@ class CommentRepository:
             
         Returns:
             Comment model instance
+            
+        Raises:
+            ValueError: If datetime fields have unexpected types or invalid format
         """
+        # Work with a copy to avoid mutating input
+        item = item.copy()
+        
         # Handle __auto_id__ from AppFlyte
         if "__auto_id__" in item:
             item["_id"] = item.pop("__auto_id__")
         
-        # Parse datetime string
-        if isinstance(item.get("createdAt"), str):
-            item["createdAt"] = datetime.fromisoformat(item["createdAt"])
+        # Parse createdAt with robust type checking
+        created_at = item.get("createdAt")
+        if created_at is None:
+            pass  # Leave as None
+        elif isinstance(created_at, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(created_at, str):
+            try:
+                item["createdAt"] = datetime.fromisoformat(created_at)
+            except ValueError as e:
+                raise ValueError(f"Invalid datetime format for createdAt: {created_at}") from e
+        else:
+            raise ValueError(
+                f"Invalid type for createdAt: expected str, datetime, or None, "
+                f"got {type(created_at).__name__}"
+            )
         
         return Comment(**item)
-
     async def create(self, comment: Comment) -> Comment:
         """Create a new comment.
         

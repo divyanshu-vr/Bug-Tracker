@@ -52,14 +52,27 @@ class ActivityLogRepository:
             
         Returns:
             ActivityLog model instance
+            
+        Raises:
+            ValueError: If datetime fields have unexpected types
         """
         # Handle __auto_id__ from AppFlyte
         if "__auto_id__" in item:
             item["_id"] = item.pop("__auto_id__")
         
-        # Parse datetime string
-        if isinstance(item.get("timestamp"), str):
-            item["timestamp"] = datetime.fromisoformat(item["timestamp"])
+        # Parse timestamp with robust type checking
+        timestamp = item.get("timestamp")
+        if timestamp is None:
+            pass  # Leave as None
+        elif isinstance(timestamp, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(timestamp, str):
+            item["timestamp"] = datetime.fromisoformat(timestamp)
+        else:
+            raise ValueError(
+                f"Invalid type for timestamp: expected str, datetime, or None, "
+                f"got {type(timestamp).__name__}"
+            )
         
         return ActivityLog(**item)
 

@@ -1,14 +1,14 @@
 """Repository for User entity data access."""
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
+import json
 
 from backend.models.bug_model import User
 from backend.services.collection_db import CollectionDBService
 
 logger = logging.getLogger(__name__)
-
 
 class UserRepository:
     """Repository for user data access using AppFlyte Collection DB.
@@ -37,7 +37,6 @@ class UserRepository:
         Returns:
             User model instance
         """
-        import json
         
         # Handle __auto_id__ from AppFlyte
         user_id = item.get("__auto_id__")
@@ -50,11 +49,29 @@ class UserRepository:
             logger.warning(f"Failed to parse description as JSON for user {user_id}")
             data = {}
         
-        # Parse datetime
+        # Parse created_at with robust type checking
         created_at = item.get("created_at")
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace(" ", "T"))
+        if created_at is None:
+            created_at = datetime.now(timezone.utc)  # Fallback to aware datetime
+        elif isinstance(created_at, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(created_at, str):
+            try:
+                # Parse ISO format string (preserves timezone info)
+                created_at = datetime.fromisoformat(created_at)
+            except ValueError:
+                # Fallback for invalid format or legacy format with space instead of T
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace(" ", "T"))
+                except ValueError:
+                    logger.warning(f"Invalid datetime format for user {user_id}, using current time")
+                    created_at = datetime.now(timezone.utc)
         else:
+            # Fallback for unexpected types
+            logger.warning(
+                f"Unexpected type for created_at in user {user_id}: {type(created_at).__name__}, "
+                f"using current time"
+            )
             created_at = datetime.now(timezone.utc)
         
         return User(
@@ -100,16 +117,35 @@ class UserRepository:
         # Filter by type (stored in JSON description) and transform to User models
         users = []
         for item in items:
+            item_id = item.get("__auto_id__", "unknown")
             description = item.get("description", "")
+            
+            # Skip empty descriptions
+            if not description:
+                continue
+            
+            # Always attempt JSON parsing
             try:
-                if description and description.startswith("{"):
-                    data = json.loads(description)
-                    if data.get("type") == self._entity_type:
+                data = json.loads(description)
+                
+                # Only process items with matching type
+                if data.get("type") == self._entity_type:
+                    try:
                         users.append(self._collection_item_to_user(item))
-            except json.JSONDecodeError:
+                    except ValueError as e:
+                        # Skip malformed user data but log the error
+                        logger.warning(f"Skipping malformed user data for item {item_id}: {e}")
+                        continue
+                        
+            except json.JSONDecodeError as e:
+                # Log parsing failures with context
+                logger.warning(
+                    f"Failed to parse description as JSON for item {item_id}: {e}. "
+                    f"Description: {description[:100]}..."
+                )
                 continue
         
-        logger.info(f"Retrieved {len(users)} users")
+        logger.info(f"Retrieved {len(users)} valid users")
         return users
 
     async def get_by_email(self, email: str) -> Optional[User]:

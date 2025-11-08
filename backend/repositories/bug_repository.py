@@ -60,16 +60,41 @@ class BugRepository:
             
         Returns:
             Bug model instance
+            
+        Raises:
+            ValueError: If datetime fields have unexpected types
         """
         # Handle __auto_id__ from AppFlyte
-        if "__auto_id__" in item:
-            item["_id"] = item.pop("__auto_id__")
+        if "__auto_id__" in item and "_id" not in item:
+            item["_id"] = item["__auto_id__"]
         
-        # Parse datetime strings
-        if isinstance(item.get("createdAt"), str):
-            item["createdAt"] = datetime.fromisoformat(item["createdAt"])
-        if isinstance(item.get("updatedAt"), str):
-            item["updatedAt"] = datetime.fromisoformat(item["updatedAt"])
+        # Parse createdAt with robust type checking
+        created_at = item.get("createdAt")
+        if created_at is None:
+            pass  # Leave as None
+        elif isinstance(created_at, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(created_at, str):
+            item["createdAt"] = datetime.fromisoformat(created_at)
+        else:
+            raise ValueError(
+                f"Invalid type for createdAt: expected str, datetime, or None, "
+                f"got {type(created_at).__name__}"
+            )
+        
+        # Parse updatedAt with robust type checking
+        updated_at = item.get("updatedAt")
+        if updated_at is None:
+            pass  # Leave as None
+        elif isinstance(updated_at, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(updated_at, str):
+            item["updatedAt"] = datetime.fromisoformat(updated_at)
+        else:
+            raise ValueError(
+                f"Invalid type for updatedAt: expected str, datetime, or None, "
+                f"got {type(updated_at).__name__}"
+            )
         
         return Bug(**item)
 
@@ -263,6 +288,10 @@ class BugRepository:
             ValueError: If bug not found or updates is empty
         """
         logger.info(f"Updating bug fields: {bug_id} with {len(updates)} field(s)")
+        
+        # Validate updates is not empty (fail-fast)
+        if not updates:
+            raise ValueError("updates cannot be empty")
         
         # Serialize datetime and enum values
         serialized_updates = {}

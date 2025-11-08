@@ -360,8 +360,7 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         if result:
             logger.info(f"Updated item in collection '{collection_name or 'base'}'")
-        
-        return result        
+             
         return result
 
     async def delete_item(

@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
+import json
 
 from backend.models.bug_model import Project
 from backend.services.collection_db import CollectionDBService
@@ -36,7 +37,6 @@ class ProjectRepository:
         Returns:
             Dictionary in collection item format
         """
-        import json
         
         # Store structured data as JSON in description field
         data = {
@@ -48,7 +48,7 @@ class ProjectRepository:
         return {
             "name": project.name,
             "description": json.dumps(data),
-            "created_at": project.createdAt.strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": project.createdAt.isoformat()  # Preserves timezone info
         }
 
     def _collection_item_to_project(self, item: Dict[str, Any]) -> Project:
@@ -59,8 +59,12 @@ class ProjectRepository:
             
         Returns:
             Project model instance
+            
+        Raises:
+            ValueError: If description field is malformed or required fields are missing
         """
         import json
+        from datetime import timezone
         
         # Handle __auto_id__ from AppFlyte
         project_id = item.get("__auto_id__")
@@ -69,22 +73,56 @@ class ProjectRepository:
         description_field = item.get("description", "{}")
         try:
             data = json.loads(description_field) if isinstance(description_field, str) else {}
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse description as JSON for project {project_id}")
-            data = {}
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse description as JSON for project {project_id}: {e}")
+            raise ValueError(
+                f"Invalid project data for project_id '{project_id}': "
+                f"description field contains malformed JSON - {str(e)}"
+            )
         
-        # Parse datetime
+        # Validate required fields exist
+        description = data.get("description")
+        created_by = data.get("createdBy")
+        
+        if not description:
+            raise ValueError(
+                f"Invalid project data for project_id '{project_id}': "
+                f"missing required field 'description' in description JSON"
+            )
+        
+        if not created_by:
+            raise ValueError(
+                f"Invalid project data for project_id '{project_id}': "
+                f"missing required field 'createdBy' in description JSON"
+            )
+        
+        # Parse created_at with robust type checking
         created_at = item.get("created_at")
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace(" ", "T"))
+        if created_at is None:
+            created_at = datetime.now(timezone.utc)  # Fallback to aware datetime
+        elif isinstance(created_at, datetime):
+            pass  # Already a datetime, no parsing needed
+        elif isinstance(created_at, str):
+            try:
+                # Parse ISO format string (preserves timezone info)
+                created_at = datetime.fromisoformat(created_at)
+            except ValueError:
+                # Fallback for invalid format
+                logger.warning(f"Invalid datetime format for project {project_id}, using current time")
+                created_at = datetime.now(timezone.utc)
         else:
+            # Fallback for unexpected types
+            logger.warning(
+                f"Unexpected type for created_at in project {project_id}: {type(created_at).__name__}, "
+                f"using current time"
+            )
             created_at = datetime.now(timezone.utc)
         
         return Project(
             _id=project_id,
             name=item.get("name", ""),
-            description=data.get("description", ""),
-            createdBy=data.get("createdBy", ""),
+            description=description,
+            createdBy=created_by,
             createdAt=created_at
         )
 
@@ -118,7 +156,7 @@ class ProjectRepository:
             project_id: Project ID (__auto_id__)
             
         Returns:
-            Project model or None if not found
+            Project model or None if not found or data is malformed
         """
         logger.info(f"Retrieving project by ID: {project_id}")
         
@@ -128,7 +166,11 @@ class ProjectRepository:
             logger.warning(f"Project not found: {project_id}")
             return None
         
-        return self._collection_item_to_project(item)
+        try:
+            return self._collection_item_to_project(item)
+        except ValueError as e:
+            logger.error(f"Failed to parse project {project_id}: {e}")
+            return None
 
     async def get_all(self) -> List[Project]:
         """Retrieve all projects.
@@ -146,16 +188,35 @@ class ProjectRepository:
         # Filter by type (stored in JSON description) and transform to Project models
         projects = []
         for item in items:
+            item_id = item.get("__auto_id__", "unknown")
             description = item.get("description", "")
+            
+            # Skip empty descriptions
+            if not description:
+                continue
+            
+            # Always attempt JSON parsing
             try:
-                if description and description.startswith("{"):
-                    data = json.loads(description)
-                    if data.get("type") == self._entity_type:
+                data = json.loads(description)
+                
+                # Only process items with matching type
+                if data.get("type") == self._entity_type:
+                    try:
                         projects.append(self._collection_item_to_project(item))
-            except json.JSONDecodeError:
+                    except ValueError as e:
+                        # Skip malformed project data but log the error
+                        logger.warning(f"Skipping malformed project data for item {item_id}: {e}")
+                        continue
+                        
+            except json.JSONDecodeError as e:
+                # Log parsing failures with context
+                logger.warning(
+                    f"Failed to parse description as JSON for item {item_id}: {e}. "
+                    f"Description: {description[:100]}..."
+                )
                 continue
         
-        logger.info(f"Retrieved {len(projects)} projects")
+        logger.info(f"Retrieved {len(projects)} valid projects")
         return projects
 
     async def update(
@@ -176,6 +237,10 @@ class ProjectRepository:
             ValueError: If project not found or updates is empty
         """
         logger.info(f"Updating project: {project_id} with {len(updates)} field(s)")
+        
+        # Validate updates is not empty (fail-fast)
+        if not updates:
+            raise ValueError("updates cannot be empty")
         
         # Serialize datetime values
         serialized_updates = {}
