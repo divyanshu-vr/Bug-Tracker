@@ -1,21 +1,6 @@
 """Services package for external integrations."""
 
 from dataclasses import dataclass
-from .mongodb import (
-    DatabaseService,
-    MongoDBService,
-    create_mongodb_service
-)
-from .appflyte_client import (
-    ProjectAPIClient,
-    AppFlyteClient,
-    create_appflyte_client
-)
-from .cloudinary_service import (
-    ImageStorageService,
-    CloudinaryService,
-    create_cloudinary_service
-)
 from .collection_db import (
     CollectionDBService,
     AppFlyteCollectionDB,
@@ -24,19 +9,10 @@ from .collection_db import (
 
 __all__ = [
     # Interfaces
-    "DatabaseService",
-    "ProjectAPIClient",
-    "ImageStorageService",
     "CollectionDBService",
     # Implementations
-    "MongoDBService",
-    "AppFlyteClient",
-    "CloudinaryService",
     "AppFlyteCollectionDB",
     # Factory functions
-    "create_mongodb_service",
-    "create_appflyte_client",
-    "create_cloudinary_service",
     "create_collection_db_service",
     # Service container
     "ServiceContainer",
@@ -51,10 +27,15 @@ class ServiceContainer:
     Encapsulates service dependencies for dependency injection.
     """
     
-    database: DatabaseService
-    project_api: ProjectAPIClient
-    image_storage: ImageStorageService
+    # Data persistence (AppFlyte Collection DB)
     collection_db: CollectionDBService
+    
+    # Repositories
+    bug_repository: 'BugRepository'
+    comment_repository: 'CommentRepository'
+    project_repository: 'ProjectRepository'
+    activity_log_repository: 'ActivityLogRepository'
+    user_repository: 'UserRepository'
     
     async def close(self) -> None:
         """Close all service connections.
@@ -64,18 +45,6 @@ class ServiceContainer:
         import logging
         logger = logging.getLogger(__name__)
         
-        # Close database connection
-        try:
-            self.database.disconnect()
-        except Exception as e:
-            logger.error(f"Error closing database connection: {e}")
-        
-        # Close API client
-        try:
-            await self.project_api.close()
-        except Exception as e:
-            logger.error(f"Error closing API client: {e}")
-        
         # Close Collection DB client
         try:
             await self.collection_db.close()
@@ -84,15 +53,8 @@ class ServiceContainer:
 
 
 def create_service_container(
-    mongodb_uri: str,
-    mongodb_database: str,
-    appflyte_base_url: str,
-    appflyte_api_key: str,
-    collection_db_base_url: str,
-    collection_db_api_key: str,
-    cloudinary_cloud_name: str,
-    cloudinary_api_key: str,
-    cloudinary_api_secret: str
+    appflyte_collection_base_url: str,
+    appflyte_collection_api_key: str
 ) -> ServiceContainer:
     """Create and initialize service container with all dependencies.
     
@@ -100,52 +62,40 @@ def create_service_container(
     during application startup (e.g., in FastAPI lifespan context).
     
     Args:
-        mongodb_uri: MongoDB connection string
-        mongodb_database: MongoDB database name
-        appflyte_base_url: AppFlyte API base URL
-        appflyte_api_key: AppFlyte API key
-        collection_db_base_url: Collection DB base URL
-        collection_db_api_key: Collection DB Bearer token
-        cloudinary_cloud_name: Cloudinary cloud name
-        cloudinary_api_key: Cloudinary API key
-        cloudinary_api_secret: Cloudinary API secret
+        appflyte_collection_base_url: AppFlyte Collection DB base URL (for data storage)
+        appflyte_collection_api_key: AppFlyte Collection DB Bearer token
         
     Returns:
         ServiceContainer with initialized services
         
     Raises:
-        ConnectionFailure: If MongoDB connection fails
         ValueError: If any service initialization fails
     """
-    # Create MongoDB service
-    database = create_mongodb_service(
-        uri=mongodb_uri,
-        database_name=mongodb_database
-    )
-    database.connect()
+    # Import repositories here to avoid circular imports
+    from backend.repositories.bug_repository import BugRepository
+    from backend.repositories.comment_repository import CommentRepository
+    from backend.repositories.project_repository import ProjectRepository
+    from backend.repositories.activity_log_repository import ActivityLogRepository
+    from backend.repositories.user_repository import UserRepository
     
-    # Create AppFlyte client
-    project_api = create_appflyte_client(
-        base_url=appflyte_base_url,
-        api_key=appflyte_api_key
-    )
-    
-    # Create Collection DB service
+    # Create Collection DB service (for data storage)
     collection_db = create_collection_db_service(
-        base_url=collection_db_base_url,
-        api_key=collection_db_api_key
+        base_url=appflyte_collection_base_url,
+        api_key=appflyte_collection_api_key
     )
     
-    # Create Cloudinary service
-    image_storage = create_cloudinary_service(
-        cloud_name=cloudinary_cloud_name,
-        api_key=cloudinary_api_key,
-        api_secret=cloudinary_api_secret
-    )
+    # Instantiate repositories with collection_db
+    bug_repository = BugRepository(collection_db)
+    comment_repository = CommentRepository(collection_db)
+    project_repository = ProjectRepository(collection_db)
+    activity_log_repository = ActivityLogRepository(collection_db)
+    user_repository = UserRepository(collection_db)
     
     return ServiceContainer(
-        database=database,
-        project_api=project_api,
-        image_storage=image_storage,
-        collection_db=collection_db
+        collection_db=collection_db,
+        bug_repository=bug_repository,
+        comment_repository=comment_repository,
+        project_repository=project_repository,
+        activity_log_repository=activity_log_repository,
+        user_repository=user_repository
     )

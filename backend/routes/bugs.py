@@ -1,10 +1,9 @@
 """Bug management API endpoints."""
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Form
 from typing import Annotated, List
 from datetime import datetime, timezone
 import logging
-import os
 
 from ..models.bug_model import (
     Bug,
@@ -19,14 +18,59 @@ from ..models.bug_model import (
     BugPriority,
     BugSeverity
 )
-from .dependencies import Services, validate_object_id
+from .dependencies import Services
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/bugs", tags=["bugs"])
 
-# Development mode flag - set to True to skip external API validations
-DEV_MODE = os.getenv("DEV_MODE", "true").lower() == "true"
+
+def _bug_to_response(bug: Bug) -> BugResponse:
+    """Transform Bug model to BugResponse.
+    
+    Centralizes the transformation logic to follow DRY principle.
+    
+    Args:
+        bug: Bug model instance
+        
+    Returns:
+        BugResponse model
+    """
+    return BugResponse(
+        _id=bug.id,
+        title=bug.title,
+        description=bug.description,
+        projectId=bug.projectId,
+        reportedBy=bug.reportedBy,
+        assignedTo=bug.assignedTo,
+        status=bug.status.value,
+        priority=bug.priority.value,
+        severity=bug.severity.value,
+        tags=bug.tags,
+        validated=bug.validated,
+        createdAt=bug.createdAt,
+        updatedAt=bug.updatedAt
+    )
+
+
+def _comment_to_response(comment) -> CommentResponse:
+    """Transform Comment model to CommentResponse.
+    
+    Centralizes the transformation logic to follow DRY principle.
+    
+    Args:
+        comment: Comment model instance
+        
+    Returns:
+        CommentResponse model
+    """
+    return CommentResponse(
+        _id=comment.id,
+        bugId=comment.bugId,
+        authorId=comment.authorId,
+        message=comment.message,
+        createdAt=comment.createdAt
+    )
 
 
 @router.post("", response_model=BugResponse, status_code=201)
@@ -37,14 +81,11 @@ async def create_bug(
     projectId: Annotated[str, Form()],
     reportedBy: Annotated[str, Form()],
     priority: Annotated[str, Form()],
-    severity: Annotated[str, Form()],
-    files: Annotated[List[UploadFile] | None, File()] = None
+    severity: Annotated[str, Form()]
 ) -> BugResponse:
-    """Create a new bug with optional file attachments.
+    """Create a new bug.
     
-    Handles multipart form data for bug details and file attachments.
-    Validates project existence through AppFlyte API.
-    Uploads attachments to Cloudinary and stores URLs in MongoDB.
+    Validates project existence through Collection DB.
     Sets initial bug status and validation flags.
     
     Args:
@@ -55,7 +96,6 @@ async def create_bug(
         reportedBy: User ID who reported the bug
         priority: Bug priority level
         severity: Bug severity level
-        files: Optional list of image file attachments (List[UploadFile] | None). Each file should be an image in JPEG, PNG, or GIF format, up to 10MB per file. Non-image files will be rejected.
         
     Returns:
         Created bug data
@@ -65,16 +105,13 @@ async def create_bug(
     """
     
     try:
-        # Validate project exists in AppFlyte (skip in dev mode)
-        if not DEV_MODE:
-            project_exists = await services.project_api.validate_project_exists(projectId)
-            if not project_exists:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Project with ID {projectId} not found"
-                )
-        else:
-            logger.info(f"DEV_MODE: Skipping AppFlyte project validation for {projectId}")
+        # Validate project exists in Collection DB
+        project = await services.project_repository.get_by_id(projectId)
+        if not project:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project with ID {projectId} not found"
+            )
         
         # Validate enum values
         try:
@@ -93,34 +130,6 @@ async def create_bug(
                 )
             )
         
-        # Upload attachments to Cloudinary with validation
-        attachment_urls = []
-        if files:
-            for file in files:
-                try:
-                    # Validate file before upload
-                    if not file.filename:
-                        raise HTTPException(status_code=400, detail="File must have a filename")
-                    
-                    # Upload to Cloudinary (validation handled internally)
-                    upload_result = await services.image_storage.upload_image(
-                        file=file.file,
-                        filename=file.filename,
-                        folder="bugtrackr/attachments"
-                    )
-                    attachment_urls.append(upload_result["url"])
-                    
-                except HTTPException:
-                    raise
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=str(e))
-                except Exception as e:
-                    logger.error(f"Failed to upload file {file.filename}: {e}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to upload file: {file.filename}. Error: {str(e)}"
-                    )
-        
         # Create bug entity
         bug = Bug(
             title=title,
@@ -129,22 +138,19 @@ async def create_bug(
             reportedBy=reportedBy,
             priority=priority_enum,
             severity=severity_enum,
-            attachments=attachment_urls,
             status=BugStatus.OPEN,
             validated=False,
             createdAt=datetime.now(timezone.utc),
             updatedAt=datetime.now(timezone.utc)
         )
         
-        # Insert into MongoDB
-        bug_dict = bug.model_dump(by_alias=True, exclude={"id"})
-        result = services.database.bugs.insert_one(bug_dict)
-        bug_dict["_id"] = str(result.inserted_id)
+        # Create bug using repository
+        created_bug = await services.bug_repository.create(bug)
         
-        logger.info(f"Bug created: {bug_dict['_id']} for project {projectId}")
+        logger.info(f"Bug created: {created_bug.id} for project {projectId}")
         
         # Return response
-        return BugResponse(**bug_dict)
+        return _bug_to_response(created_bug)
         
     except HTTPException:
         raise
@@ -156,31 +162,29 @@ async def create_bug(
 
 @router.get("", response_model=List[BugResponse])
 async def get_all_bugs(services: Services) -> List[BugResponse]:
-    """Retrieve all bugs with project information.
+    """Retrieve all bugs.
     
-    Lists all bugs and merges with project data from AppFlyte API.
+    Lists all bugs from Collection DB.
     
     Args:
         services: Injected service container
         
     Returns:
-        List of bug data with project information
+        List of bug data
         
     Raises:
         HTTPException: If retrieval fails
     """
     
     try:
-        # Retrieve all bugs from MongoDB
-        bugs_cursor = services.database.bugs.find()
-        bugs = []
+        # Retrieve all bugs using repository
+        bugs = await services.bug_repository.get_all()
         
-        for bug_doc in bugs_cursor:
-            bug_doc["_id"] = str(bug_doc["_id"])
-            bugs.append(BugResponse(**bug_doc))
+        # Transform to response models
+        bug_responses = [_bug_to_response(bug) for bug in bugs]
         
-        logger.info(f"Retrieved {len(bugs)} bugs")
-        return bugs
+        logger.info(f"Retrieved {len(bug_responses)} bugs")
+        return bug_responses
         
     except Exception as e:
         logger.error(f"Error retrieving bugs: {e}")
@@ -191,8 +195,7 @@ async def get_all_bugs(services: Services) -> List[BugResponse]:
 async def get_bug_by_id(bug_id: str, services: Services) -> BugWithCommentsResponse:
     """Retrieve detailed bug view with comments.
     
-    Gets specific bug details and associated comments.
-    Merges bug data with project information from AppFlyte API.
+    Gets specific bug details and associated comments from Collection DB.
     
     Args:
         bug_id: Bug identifier
@@ -205,31 +208,21 @@ async def get_bug_by_id(bug_id: str, services: Services) -> BugWithCommentsRespo
         HTTPException: If bug not found or retrieval fails
     """
     try:
-        # Validate ObjectId format
-        obj_id = validate_object_id(bug_id)
-        
-        # Retrieve bug from MongoDB
-        bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        if not bug_doc:
+        # Retrieve bug using repository
+        bug = await services.bug_repository.get_by_id(bug_id)
+        if not bug:
             raise HTTPException(status_code=404, detail=f"Bug with ID {bug_id} not found")
         
-        bug_doc["_id"] = str(bug_doc["_id"])
-        bug = BugResponse(**bug_doc)
+        # Retrieve comments for this bug using repository
+        comments = await services.comment_repository.get_by_bug_id(bug_id)
         
-        # Retrieve comments for this bug
-        comments_cursor = services.database.comments.find({"bugId": bug_id})
-        comments = []
+        # Transform to response models
+        bug_response = _bug_to_response(bug)
+        comment_responses = [_comment_to_response(comment) for comment in comments]
         
-        for comment_doc in comments_cursor:
-            comment_doc["_id"] = str(comment_doc["_id"])
-            comments.append(CommentResponse(**comment_doc))
+        logger.info(f"Retrieved bug {bug_id} with {len(comment_responses)} comments")
         
-        # Sort comments by creation time
-        comments.sort(key=lambda c: c.createdAt)
-        
-        logger.info(f"Retrieved bug {bug_id} with {len(comments)} comments")
-        
-        return BugWithCommentsResponse(bug=bug, comments=comments)
+        return BugWithCommentsResponse(bug=bug_response, comments=comment_responses)
         
     except HTTPException:
         raise
@@ -249,7 +242,7 @@ async def update_bug_status(
     
     Validates role-based permissions for status changes.
     Implements tester validation and closure logic.
-    Logs status changes to AppFlyte activity logs.
+    Logs status changes to Collection DB activity logs.
     
     Args:
         bug_id: Bug identifier
@@ -263,15 +256,12 @@ async def update_bug_status(
         HTTPException: If validation fails or unauthorized
     """
     try:
-        # Validate ObjectId format
-        obj_id = validate_object_id(bug_id)
-        
-        # Retrieve current bug
-        bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        if not bug_doc:
+        # Retrieve current bug using repository
+        bug = await services.bug_repository.get_by_id(bug_id)
+        if not bug:
             raise HTTPException(status_code=404, detail=f"Bug with ID {bug_id} not found")
         
-        current_status = bug_doc.get("status")
+        current_status = bug.status.value
         new_status = status_update.status.value
         user_role = status_update.userRole.lower()
         
@@ -293,46 +283,35 @@ async def update_bug_status(
                 )
             
             # Bug must be validated before closing
-            if not bug_doc.get("validated", False):
+            if not bug.validated:
                 raise HTTPException(
                     status_code=400,
                     detail="Bug must be validated before closing"
                 )
         
-        # Update bug status and timestamp
-        update_data = {
-            "status": new_status,
-            "updatedAt": datetime.now(timezone.utc)
-        }
-        
-        services.database.bugs.update_one(
-            {"_id": obj_id},
-            {"$set": update_data}
+        # Update bug status using repository
+        updated_bug = await services.bug_repository.update_status(
+            bug_id=bug_id,
+            status=status_update.status,
+            updated_at=datetime.now(timezone.utc)
         )
         
-        # Log activity to AppFlyte
-        await services.project_api.log_activity(
-            user_id=status_update.userId,
+        # Log activity to Collection DB
+        from backend.models.bug_model import ActivityLog
+        activity_log = ActivityLog(
+            bugId=bug_id,
             action="status_changed",
-            resource_type="bug",
-            resource_id=bug_id,
-            details={
-                "old_status": current_status,
-                "new_status": new_status,
-                "user_role": user_role
-            }
+            performedBy=status_update.userId,
+            timestamp=datetime.now(timezone.utc)
         )
-        
-        # Retrieve updated bug
-        updated_bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        updated_bug_doc["_id"] = str(updated_bug_doc["_id"])
+        await services.activity_log_repository.create(activity_log)
         
         logger.info(f"Bug {bug_id} status updated: {current_status} -> {new_status} by {status_update.userId}")
         
         return StatusUpdateResponse(
             success=True,
             message=f"Bug status updated to {new_status}",
-            bug=BugResponse(**updated_bug_doc)
+            bug=_bug_to_response(updated_bug)
         )
         
     except HTTPException:
@@ -366,9 +345,6 @@ async def validate_bug(
         HTTPException: If unauthorized or validation fails
     """
     try:
-        # Validate ObjectId format
-        obj_id = validate_object_id(bug_id)
-        
         # Check role authorization
         if userRole.lower() not in ["tester", "admin"]:
             raise HTTPException(
@@ -376,39 +352,34 @@ async def validate_bug(
                 detail="Only Testers can validate bugs"
             )
         
-        # Retrieve bug
-        bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        if not bug_doc:
+        # Retrieve bug using repository
+        bug = await services.bug_repository.get_by_id(bug_id)
+        if not bug:
             raise HTTPException(status_code=404, detail=f"Bug with ID {bug_id} not found")
         
-        # Update validated flag
-        services.database.bugs.update_one(
-            {"_id": obj_id},
-            {"$set": {
-                "validated": True,
-                "updatedAt": datetime.now(timezone.utc)
-            }}
+        # Update validated flag using repository
+        updated_bug = await services.bug_repository.update_validation(
+            bug_id=bug_id,
+            validated=True,
+            updated_at=datetime.now(timezone.utc)
         )
         
-        # Log activity to AppFlyte
-        await services.project_api.log_activity(
-            user_id=userId,
+        # Log activity to Collection DB
+        from backend.models.bug_model import ActivityLog
+        activity_log = ActivityLog(
+            bugId=bug_id,
             action="bug_validated",
-            resource_type="bug",
-            resource_id=bug_id,
-            details={"validated_by": userId}
+            performedBy=userId,
+            timestamp=datetime.now(timezone.utc)
         )
-        
-        # Retrieve updated bug
-        updated_bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        updated_bug_doc["_id"] = str(updated_bug_doc["_id"])
+        await services.activity_log_repository.create(activity_log)
         
         logger.info(f"Bug {bug_id} validated by {userId}")
         
         return StatusUpdateResponse(
             success=True,
             message="Bug validated successfully",
-            bug=BugResponse(**updated_bug_doc)
+            bug=_bug_to_response(updated_bug)
         )
         
     except HTTPException:
@@ -428,7 +399,7 @@ async def assign_bug(
     """Assign bug to a user.
     
     Allows developers to assign bugs to users.
-    Validates assignee exists in AppFlyte user system.
+    Validates assignee exists in Collection DB user system.
     Updates bug timestamp on assignment changes.
     
     Args:
@@ -443,53 +414,44 @@ async def assign_bug(
         HTTPException: If validation fails or user not found
     """
     try:
-        # Validate ObjectId format
-        obj_id = validate_object_id(bug_id)
-        
-        # Retrieve bug
-        bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        if not bug_doc:
+        # Retrieve bug using repository
+        bug = await services.bug_repository.get_by_id(bug_id)
+        if not bug:
             raise HTTPException(status_code=404, detail=f"Bug with ID {bug_id} not found")
         
-        # Validate assignee exists in AppFlyte
-        assignee = await services.project_api.get_user(assignment.assignedTo)
+        # Validate assignee exists in Collection DB
+        assignee = await services.user_repository.get_by_id(assignment.assignedTo)
         if not assignee:
             raise HTTPException(
                 status_code=404,
                 detail=f"User with ID {assignment.assignedTo} not found"
             )
         
-        # Update bug assignment
-        services.database.bugs.update_one(
-            {"_id": obj_id},
-            {"$set": {
-                "assignedTo": assignment.assignedTo,
-                "updatedAt": datetime.now(timezone.utc)
-            }}
+        assignee_name = assignee.name
+        
+        # Update bug assignment using repository
+        updated_bug = await services.bug_repository.update_assignment(
+            bug_id=bug_id,
+            assigned_to=assignment.assignedTo,
+            updated_at=datetime.now(timezone.utc)
         )
         
-        # Log activity to AppFlyte
-        await services.project_api.log_activity(
-            user_id=assignment.assignedBy,
+        # Log activity to Collection DB
+        from backend.models.bug_model import ActivityLog
+        activity_log = ActivityLog(
+            bugId=bug_id,
             action="bug_assigned",
-            resource_type="bug",
-            resource_id=bug_id,
-            details={
-                "assigned_to": assignment.assignedTo,
-                "assigned_by": assignment.assignedBy
-            }
+            performedBy=assignment.assignedBy,
+            timestamp=datetime.now(timezone.utc)
         )
-        
-        # Retrieve updated bug
-        updated_bug_doc = services.database.bugs.find_one({"_id": obj_id})
-        updated_bug_doc["_id"] = str(updated_bug_doc["_id"])
+        await services.activity_log_repository.create(activity_log)
         
         logger.info(f"Bug {bug_id} assigned to {assignment.assignedTo} by {assignment.assignedBy}")
         
         return AssignmentResponse(
             success=True,
-            message=f"Bug assigned to {assignee.get('name', assignment.assignedTo)}",
-            bug=BugResponse(**updated_bug_doc)
+            message=f"Bug assigned to {assignee_name}",
+            bug=_bug_to_response(updated_bug)
         )
         
     except HTTPException:

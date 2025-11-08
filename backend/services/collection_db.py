@@ -166,33 +166,33 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         Args:
             collection_name: Name of the collection (e.g., "bugs", "comments")
+                           Empty string uses base collection
             data: Item data to create
             
         Returns:
             Created item with __auto_id__
             
         Raises:
-            ValueError: If collection_name is empty or data is None
+            ValueError: If data is None
             httpx.HTTPError: If request fails
         """
         # Validate inputs (fail-fast)
-        if not collection_name or not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
         if data is None:
             raise ValueError("data cannot be None")
         
-        url = f"{self._base_url}/{collection_name}"
+        # Build URL - empty collection_name uses base URL
+        url = f"{self._base_url}/{collection_name}" if collection_name else self._base_url
         request_body = {"collection_item": data}
         
-        logger.info(f"Creating item in collection '{collection_name}'")
+        logger.info(f"Creating item in collection '{collection_name or 'base'}'")
         result = await self._make_request("POST", url, request_body)
         
         if result is None:
-            raise ValueError(f"Failed to create item: collection '{collection_name}' not found")
+            raise ValueError(f"Failed to create item: collection '{collection_name or 'base'}' not found")
         
         if result:
             item_id = result.get("__auto_id__", "unknown")
-            logger.info(f"Created item in collection '{collection_name}'")
+            logger.info(f"Created item in collection '{collection_name or 'base'}'")
         
         return result
     async def get_all_items(
@@ -205,21 +205,18 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         Args:
             collection_name: Name of the collection
+                           Empty string uses base collection
             
         Returns:
             List of items (empty list if collection not found)
             
         Raises:
-            ValueError: If collection_name is empty
             httpx.HTTPError: If request fails
         """
-        # Validate input (fail-fast)
-        if not collection_name or not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
+        # Build URL - empty collection_name uses base URL
+        url = f"{self._base_url}/{collection_name}" if collection_name else self._base_url
         
-        url = f"{self._base_url}/{collection_name}"
-        
-        logger.info(f"Retrieving all items from collection '{collection_name}'")
+        logger.info(f"Retrieving all items from collection '{collection_name or 'base'}'")
         result = await self._make_request("GET", url)
         
         # Handle different response formats
@@ -235,18 +232,36 @@ class AppFlyteCollectionDB(CollectionDBService):
         # If result is a dict with items key, return the items
         if isinstance(result, dict) and "items" in result:
             items = result["items"]
-            logger.info(f"Retrieved {len(items)} items from collection '{collection_name}'")
+            logger.info(f"Retrieved {len(items)} items from collection '{collection_name or 'base'}'")
             return items
         
-        # If result is a dict, it might be the items directly
+        # If result is a dict, it might be the items directly or contain collection data
         if isinstance(result, dict):
             logger.debug(f"Response is dict with keys: {list(result.keys())}")
+            
+            # AppFlyte Collection DB returns items nested by collection_definition_id
+            # Extract all items from nested structure
+            all_items = []
+            for key, value in result.items():
+                if isinstance(value, list):
+                    # Found a list of items
+                    for item in value:
+                        if isinstance(item, dict) and "payload" in item:
+                            # Extract payload which contains the actual data
+                            all_items.append(item["payload"])
+                        elif isinstance(item, dict):
+                            all_items.append(item)
+            
+            if all_items:
+                logger.info(f"Retrieved {len(all_items)} items from collection '{collection_name or 'base'}'")
+                return all_items
+            
             # Return as single-item list if it's an object
-            logger.info(f"Retrieved 1 item from collection '{collection_name}'")
+            logger.info(f"Retrieved 1 item from collection '{collection_name or 'base'}'")
             return [result]
         
         # Otherwise return empty list (safe default)
-        logger.warning(f"Unexpected response format from collection '{collection_name}': {type(result)}")
+        logger.warning(f"Unexpected response format from collection '{collection_name or 'base'}': {type(result)}")
         return []
 
     async def get_item_by_id(
@@ -260,29 +275,31 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         Args:
             collection_name: Name of the collection
+                           Empty string uses base collection
             item_id: Item ID (__auto_id__)
             
         Returns:
             Item data or None if not found
             
         Raises:
-            ValueError: If collection_name or item_id is empty
+            ValueError: If item_id is empty
         """
         # Validate inputs (fail-fast)
-        if not collection_name or not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
         if not item_id or not item_id.strip():
             raise ValueError("item_id cannot be empty")
         
-        url = f"{self._base_url}/{collection_name}/{item_id}"
+        # Build URL - empty collection_name uses base URL
+        url = f"{self._base_url}/{collection_name}/{item_id}" if collection_name else f"{self._base_url}/{item_id}"
         
-        logger.info(f"Retrieving item from collection '{collection_name}'")
+        logger.info(f"Retrieving item from collection '{collection_name or 'base'}'")
         result = await self._make_request("GET", url)
         
         if result:
-            logger.info(f"Retrieved item from collection '{collection_name}'")
+            logger.info(f"Retrieved item from collection '{collection_name or 'base'}'")
         else:
-            logger.warning(f"Item not found in collection '{collection_name}'")
+            logger.warning(f"Item not found in collection '{collection_name or 'base'}'")
+        
+        return result
         
     async def update_item(
         self,
@@ -302,6 +319,7 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         Args:
             collection_name: Name of the collection
+                           Empty string uses base collection
             item_id: Item ID (__auto_id__)
             updates: Dictionary of field names to new values
             
@@ -309,18 +327,17 @@ class AppFlyteCollectionDB(CollectionDBService):
             Updated item
             
         Raises:
-            ValueError: If collection_name, item_id is empty or updates is None/empty
+            ValueError: If item_id is empty or updates is None/empty
             httpx.HTTPError: If request fails
         """
         # Validate inputs (fail-fast)
-        if not collection_name or not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
         if not item_id or not item_id.strip():
             raise ValueError("item_id cannot be empty")
         if updates is None or not updates:
             raise ValueError("updates cannot be None or empty")
         
-        url = f"{self._base_url}/{collection_name}/{item_id}"
+        # Build URL - empty collection_name uses base URL
+        url = f"{self._base_url}/{collection_name}/{item_id}" if collection_name else f"{self._base_url}/{item_id}"
         
         # Convert updates dict to fields array with JSON path syntax
         fields: List[Dict[str, Any]] = []
@@ -335,14 +352,14 @@ class AppFlyteCollectionDB(CollectionDBService):
             "fields": fields
         }
         
-        logger.info(f"Updating item in collection '{collection_name}' with {len(fields)} field(s)")
+        logger.info(f"Updating item in collection '{collection_name or 'base'}' with {len(fields)} field(s)")
         result = await self._make_request("PUT", url, request_body)
         
         if result is None:
-            raise ValueError(f"Failed to update item: item '{item_id}' not found in collection '{collection_name}'")
+            raise ValueError(f"Failed to update item: item '{item_id}' not found in collection '{collection_name or 'base'}'")
         
         if result:
-            logger.info(f"Updated item in collection '{collection_name}'")
+            logger.info(f"Updated item in collection '{collection_name or 'base'}'")
         
         return result        
         return result
@@ -358,33 +375,33 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         Args:
             collection_name: Name of the collection
+                           Empty string uses base collection
             item_id: Item ID (__auto_id__)
             
         Returns:
             True if successful, False if item not found
             
         Raises:
-            ValueError: If collection_name or item_id is empty
+            ValueError: If item_id is empty
             httpx.HTTPError: If request fails
         """
         # Validate inputs (fail-fast)
-        if not collection_name or not collection_name.strip():
-            raise ValueError("collection_name cannot be empty")
         if not item_id or not item_id.strip():
             raise ValueError("item_id cannot be empty")
         
-        url = f"{self._base_url}/{collection_name}/{item_id}"
+        # Build URL - empty collection_name uses base URL
+        url = f"{self._base_url}/{collection_name}/{item_id}" if collection_name else f"{self._base_url}/{item_id}"
         
-        logger.info(f"Deleting item from collection '{collection_name}'")
+        logger.info(f"Deleting item from collection '{collection_name or 'base'}'")
         result = await self._make_request("DELETE", url)
         
         # DELETE returns None for 404, {} for success, or error
         success = result is not None
         
         if success:
-            logger.info(f"Deleted item from collection '{collection_name}'")
+            logger.info(f"Deleted item from collection '{collection_name or 'base'}'")
         else:
-            logger.warning(f"Failed to delete item from collection '{collection_name}'")
+            logger.warning(f"Failed to delete item from collection '{collection_name or 'base'}'")
         
         return success
 

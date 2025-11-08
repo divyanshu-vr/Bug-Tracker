@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -7,7 +8,7 @@ import logging
 
 from .services import ServiceContainer, create_service_container
 from .config import Config
-from .routes import bugs, comments, projects, uploads
+from .routes import bugs, comments, projects
 
 logger = logging.getLogger(__name__)
 
@@ -39,18 +40,11 @@ def create_app(config: Config) -> FastAPI:
         logger.info("Starting BugTrackr application...")
         try:
             services = create_service_container(
-                mongodb_uri=config.mongodb_uri,
-                mongodb_database=config.mongodb_database,
-                appflyte_base_url=config.appflyte_base_url,
-                appflyte_api_key=config.appflyte_api_key,
-                collection_db_base_url=config.collection_db_base_url,
-                collection_db_api_key=config.collection_db_api_key,
-                cloudinary_cloud_name=config.cloudinary_cloud_name,
-                cloudinary_api_key=config.cloudinary_api_key,
-                cloudinary_api_secret=config.cloudinary_api_secret
+                appflyte_collection_base_url=config.appflyte_collection_base_url,
+                appflyte_collection_api_key=config.appflyte_collection_api_key
             )
             app.state.services = services
-            logger.info("All services initialized successfully")
+            logger.info("All services initialized successfully with AppFlyte Collection DB")
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
             if services is not None:
@@ -71,7 +65,7 @@ def create_app(config: Config) -> FastAPI:
     # Create FastAPI application
     app = FastAPI(
         title="BugTrackr API",
-        description="Bug tracking system with MongoDB, AppFlyte, and Cloudinary integration",
+        description="Bug tracking system with AppFlyte Collection DB integration",
         version="1.0.0",
         lifespan=lifespan
     )
@@ -89,7 +83,6 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(bugs.router)
     app.include_router(comments.router)
     app.include_router(projects.router)
-    app.include_router(uploads.router)
     
     @app.get("/")
     async def root():
@@ -98,14 +91,43 @@ def create_app(config: Config) -> FastAPI:
     
     @app.get("/health")
     async def health_check(request: Request):
-        """Health check endpoint."""
-        services: ServiceContainer = request.app.state.services
-        db_connected = services.database.is_connected()
+        """Health check endpoint.
         
-        return {
-            "status": "healthy" if db_connected else "degraded",
-            "database": "connected" if db_connected else "disconnected"
+        Tests Collection DB connectivity with a lightweight API call.
+        Returns detailed status information for monitoring.
+        """
+        services: ServiceContainer = request.app.state.services
+        
+        # Test Collection DB connectivity with a real API call
+        collection_db_status: str = "unavailable"
+        collection_db_error: str | None = None
+        
+        try:
+            # Perform lightweight connectivity test
+            # get_all_items will raise httpx.HTTPError if API is unreachable
+            await services.collection_db.get_all_items("")
+            collection_db_status = "connected"
+        except Exception as e:
+            collection_db_status = "error"
+            collection_db_error = str(e)
+            logger.error(f"Collection DB health check failed: {e}")
+        
+        is_healthy: bool = collection_db_status == "connected"
+        
+        response: dict[str, Any] = {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "services": {
+                "collection_db": {
+                    "status": collection_db_status,
+                    "type": "AppFlyte Collection Database"
+                }
+            }
         }
+        
+        if collection_db_error:
+            response["services"]["collection_db"]["error"] = collection_db_error
+        
+        return response
     
     return app
 

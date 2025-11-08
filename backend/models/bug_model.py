@@ -65,7 +65,7 @@ class Bug(BaseModel):
     status: BugStatus = Field(default=BugStatus.OPEN)
     priority: BugPriority
     severity: BugSeverity
-    attachments: List[str] = Field(default_factory=list)
+    tags: List[str] = Field(default_factory=list)
     validated: bool = Field(default=False)
     createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -121,6 +121,62 @@ class Comment(BaseModel):
         return v
 
 
+class Project(BaseModel):
+    """
+    Project entity model.
+    Represents a project in the system.
+    """
+    id: Optional[str] = Field(None, alias="_id")
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1)
+    createdBy: str = Field(..., min_length=1)
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class ActivityLog(BaseModel):
+    """
+    Activity log entity model.
+    Represents an activity log entry tracking actions performed on bugs.
+    """
+    id: Optional[str] = Field(None, alias="_id")
+    bugId: str = Field(..., min_length=1)
+    action: str = Field(..., min_length=1)
+    performedBy: str = Field(..., min_length=1)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class User(BaseModel):
+    """
+    User entity model.
+    
+    Note: Users are predefined in Collection DB with roles.
+    This model is used for validation only. No user creation or modification.
+    """
+    id: Optional[str] = Field(None, alias="_id")
+    name: str = Field(..., min_length=1, max_length=200)
+    email: str = Field(..., min_length=1)
+    role: str = Field(..., min_length=1)  # e.g., "admin", "developer", "tester"
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
 # Request Models
 
 class BugCreateRequest(BaseModel):
@@ -131,7 +187,6 @@ class BugCreateRequest(BaseModel):
     reportedBy: str = Field(..., min_length=1)
     priority: BugPriority
     severity: BugSeverity
-    attachments: List[str] = Field(default_factory=list)
 
 
 class BugStatusUpdateRequest(BaseModel):
@@ -160,13 +215,6 @@ class CommentCreateRequest(BaseModel):
     message: str = Field(..., min_length=1)
 
 
-class FileUploadResponse(BaseModel):
-    """Response model for file upload"""
-    url: str
-    filename: str
-    size: Optional[int] = None
-
-
 # Response Models
 
 class BugResponse(BaseModel):
@@ -180,7 +228,7 @@ class BugResponse(BaseModel):
     status: str
     priority: str
     severity: str
-    attachments: List[str]
+    tags: List[str]
     validated: bool
     createdAt: datetime
     updatedAt: datetime
@@ -198,6 +246,21 @@ class CommentResponse(BaseModel):
     bugId: str
     authorId: str
     message: str
+    createdAt: datetime
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class ProjectResponse(BaseModel):
+    """Response model for project data"""
+    id: str = Field(..., alias="_id")
+    name: str
+    description: str
+    createdBy: str
     createdAt: datetime
 
     class Config:
