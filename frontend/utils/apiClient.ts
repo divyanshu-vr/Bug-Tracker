@@ -8,6 +8,7 @@ import type {
   Bug,
   Comment,
   Project,
+  User,
   BugCreateRequest,
   BugStatusUpdateRequest,
   BugAssignRequest,
@@ -107,14 +108,14 @@ export const handleApiError = (error: AxiosError): string => {
  */
 const transformDates = <T extends Record<string, any>>(data: T): T => {
   const dateFields = ['createdAt', 'updatedAt', 'timestamp'];
-  const transformed = { ...data };
+  const transformed = { ...data } as Record<string, any>;
 
   dateFields.forEach(field => {
     if (transformed[field] && typeof transformed[field] === 'string') {
       transformed[field] = new Date(transformed[field]);
     }
   });
-  return transformed;
+  return transformed as T;
 };
 
 // Bug API endpoints
@@ -214,6 +215,25 @@ export const projectApi = {
    */
   getById: async (id: string): Promise<ProjectResponse> => {
     const response = await apiClient.get<ProjectResponse>(`/api/projects/${id}`);
+    return transformDates(response.data);
+  },
+};
+
+// User API endpoints
+export const userApi = {
+  /**
+   * Get all users
+   */
+  getAll: async (): Promise<User[]> => {
+    const response = await apiClient.get<User[]>('/api/users');
+    return response.data.map(transformDates);
+  },
+
+  /**
+   * Get user by ID
+   */
+  getById: async (id: string): Promise<User> => {
+    const response = await apiClient.get<User>(`/api/users/${id}`);
     return transformDates(response.data);
   },
 };
