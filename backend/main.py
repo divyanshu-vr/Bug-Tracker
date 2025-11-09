@@ -8,7 +8,7 @@ import logging
 
 from .services import ServiceContainer, create_service_container
 from .config import Config
-from .routes import bugs, comments, projects
+from .routes import bugs, comments, projects, users
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(bugs.router)
     app.include_router(comments.router)
     app.include_router(projects.router)
+    app.include_router(users.router)
     
     @app.get("/")
     async def root():
