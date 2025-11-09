@@ -82,7 +82,7 @@ async def create_comment(
                 f"Rolling back comment {created_comment.id}: {bug_update_error}"
             )
             try:
-                await services.collection_db.delete_item("comments", created_comment.id)
+                await services.comment_repository.delete(created_comment.id)
                 logger.info(f"Successfully rolled back comment {created_comment.id}")
             except Exception as rollback_error:
                 logger.critical(
