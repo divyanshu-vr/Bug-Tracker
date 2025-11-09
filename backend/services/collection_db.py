@@ -189,11 +189,9 @@ class AppFlyteCollectionDB(CollectionDBService):
         
         if result is None:
             raise ValueError(f"Failed to create item: collection '{collection_name or 'base'}' not found")
-        
-        if result:
-            item_id = result.get("__auto_id__", "unknown")
-            logger.info(f"Created item in collection '{collection_name or 'base'}'")
-        
+
+        item_id = result.get("__auto_id__", "unknown")
+        logger.info(f"Created item in collection '{collection_name or 'base'}' with id '{item_id}'")
         return result
     async def get_all_items(
         self,
@@ -358,9 +356,8 @@ class AppFlyteCollectionDB(CollectionDBService):
         if result is None:
             raise ValueError(f"Failed to update item: item '{item_id}' not found in collection '{collection_name or 'base'}'")
         
-        if result:
-            logger.info(f"Updated item in collection '{collection_name or 'base'}'")
-             
+        logger.info(f"Updated item in collection '{collection_name or 'base'}'")
+        
         return result
 
     async def delete_item(
@@ -413,7 +410,7 @@ def create_collection_db_service(
     """Factory function to create Collection DB service instance.
     
     Args:
-        base_url: Full base URL from Collection Operations.txt
+        base_url: Full base URL for the collection database service API
         api_key: Bearer token for authentication
         timeout: Request timeout in seconds
         
