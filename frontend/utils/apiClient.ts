@@ -173,11 +173,7 @@ export const bugApi = {
     formData.append('priority', data.priority);
     formData.append('severity', data.severity);
     
-    const response = await apiClient.post<BugResponse>('/api/bugs', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post<BugResponse>('/api/bugs', formData);
     return transformDates(response.data);
   },
 

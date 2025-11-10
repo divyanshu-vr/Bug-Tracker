@@ -109,10 +109,7 @@ export default function BugsPage() {
   };
 
   // Get project name by ID
-  const getProjectName = (projectId: string): string => {
-    const project = projects.find(p => p._id === projectId);
-    return project?.name || 'Unknown Project';
-  };
+
 
   // Get user name by ID
   const getUserName = (userId: string): string => {
