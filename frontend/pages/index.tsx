@@ -7,6 +7,7 @@ import { useUser } from '@/contexts/UserContext';
 import { bugApi, projectApi } from '@/utils/apiClient';
 import { Bug, Project, BugStatus, BugPriority } from '@/utils/types';
 import { AlertCircle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import WelcomeScreen from '@/components/WelcomeScreen';
 
 interface BugStatistics {
   total: number;
@@ -33,6 +34,19 @@ export default function Home() {
     high: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Show welcome screen only on first load of the session
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
+      if (!hasSeenWelcome) {
+        setShowWelcome(true);
+        sessionStorage.setItem('hasSeenWelcome', 'true');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,8 +71,10 @@ export default function Home() {
           high: bugsData.filter(b => b.priority === BugPriority.HIGH).length,
         };
         setStatistics(stats);
+        setDataLoaded(true);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
+        setDataLoaded(true);
       } finally {
         setLoading(false);
       }
@@ -106,36 +122,30 @@ export default function Home() {
     return project?.name || 'Unknown Project';
   };
 
-  if (loading) {
-    return (
-      <div className="p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-muted-foreground">Loading dashboard...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleWelcomeComplete = () => {
+    setShowWelcome(false);
+  };
 
   return (
-    <div className="p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <>
+      {/* Always render the dashboard content */}
+      <div className="p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
 
-        {currentUser ? (
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight">Welcome Back, {currentUser.name}</h1>
-            <p className="text-muted-foreground mt-2">
-              Heres the summary of the bug tracking activities so far.
-            </p>
-          </div>
-        ) : (
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Please select a user from the navigation to get started
-            </p>
-          </div>
-        )}
+          {currentUser ? (
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight">Welcome Back, {currentUser.name}</h1>
+              <p className="text-muted-foreground mt-2">
+                Heres the summary of the bug tracking activities so far.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                Please select a user from the navigation to get started
+              </p>
+            </div>
+          )}
 
         {/* Bug Statistics Dashboard */}
         <div>
@@ -293,7 +303,11 @@ export default function Home() {
             </Card>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+      
+      {/* Show welcome screen overlay */}
+      {showWelcome && <WelcomeScreen onComplete={handleWelcomeComplete} isDataLoaded={dataLoaded} />}
+    </>
   );
 }

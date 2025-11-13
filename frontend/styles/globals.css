@@ -1,3 +1,60 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+  /* Custom animations for welcome screen */
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes spin-reverse {
+    from {
+      transform: rotate(360deg);
+    }
+    to {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes bounce-subtle {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10%);
+    }
+  }
+
+  .animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
+  }
+
+  .animate-spin-reverse {
+    animation: spin-reverse 2s linear infinite;
+  }
+
+  .animate-bounce-subtle {
+    animation: bounce-subtle 2s ease-in-out infinite;
+  }
+
+  .animate-bounce-delay-0 {
+    animation: bounce 1s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+
+  .animate-bounce-delay-1 {
+    animation: bounce 1s ease-in-out infinite;
+    animation-delay: 0.2s;
+  }
+
+  .animate-bounce-delay-2 {
+    animation: bounce 1s ease-in-out infinite;
+    animation-delay: 0.4s;
+  }
+}

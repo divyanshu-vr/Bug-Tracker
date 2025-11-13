@@ -10,3 +10,5 @@ export { ErrorBoundary, withErrorBoundary } from './ErrorBoundary';
 export { ApiErrorFallback, RetryableError } from './ApiErrorFallback';
 export { LoadingState, LoadingSpinner } from './LoadingState';
 export { ToastContainer } from './Toast';
+export { default as WelcomeScreen } from './WelcomeScreen';
+export { default as SplitText } from './SplitText';

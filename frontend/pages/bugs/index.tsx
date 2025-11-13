@@ -10,7 +10,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
-import { BugCard } from '@/components/BugCard';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -19,24 +19,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { bugApi, projectApi, userApi, commentApi, handleApiError } from '@/utils/apiClient';
-import { Bug, BugStatus, BugPriority, Project, User } from '@/utils/types';
+import { bugApi, userApi, projectApi } from '@/utils/apiClient';
+import { Bug, BugStatus, BugPriority, User, Project } from '@/utils/types';
 import { useUser } from '@/contexts/UserContext';
-import { useToast } from '@/contexts/ToastContext';
 import { LoadingState } from '@/components/LoadingState';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { handleEventualConsistency } from '@/utils/apiHelpers';
-import { AxiosError } from 'axios';
 
 export default function BugsPage() {
   const router = useRouter();
   const { currentUser } = useUser();
-  const toast = useToast();
   
   const [bugs, setBugs] = useState<Bug[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
   
@@ -54,58 +49,21 @@ export default function BugsPage() {
     setLoadError(null);
     
     try {
-      const [bugsData, projectsData, usersData] = await Promise.all([
+      const [bugsData, usersData, projectsData] = await Promise.all([
         bugApi.getAll(),
-        projectApi.getAll(),
         userApi.getAll(),
+        projectApi.getAll(),
       ]);
       
       setBugs(bugsData);
-      setProjects(projectsData);
       setUsers(usersData);
+      setProjects(projectsData);
       
-      // Load comment counts for each bug
-      const counts: Record<string, number> = {};
-      await Promise.all(
-        bugsData.map(async (bug) => {
-          try {
-            const comments = await commentApi.getByBugId(bug._id);
-            counts[bug._id] = comments.length;
-          } catch (err) {
-            counts[bug._id] = 0;
-          }
-        })
-      );
-      setCommentCounts(counts);
     } catch (err) {
       console.error('Failed to load bugs:', err);
       setLoadError(err as Error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleStatusUpdate = async (bugId: string, newStatus: BugStatus) => {
-    if (!currentUser) {
-      toast.warning('Please select a user first');
-      return;
-    }
-
-    try {
-      await handleEventualConsistency(
-        () => bugApi.updateStatus(bugId, {
-          status: newStatus,
-          userId: currentUser._id,
-          userRole: currentUser.role as any,
-        }),
-        () => loadData()
-      );
-      
-      toast.success('Bug status updated successfully');
-    } catch (err) {
-      console.error('Failed to update status:', err);
-      const errorMessage = handleApiError(err as AxiosError);
-      toast.error(errorMessage);
     }
   };
 
@@ -117,11 +75,68 @@ export default function BugsPage() {
     router.push('/bugs/new');
   };
 
-
   // Get user name by ID
   const getUserName = (userId: string): string => {
     const user = users.find(u => u._id === userId);
     return user?.name || 'Unknown User';
+  };
+
+  // Get project name by ID
+  const getProjectName = (projectId: string): string => {
+    const project = projects.find(p => p._id === projectId);
+    return project?.name || 'Unknown Project';
+  };
+
+  // Get badge variant for priority
+  const getPriorityBadgeVariant = (priority: BugPriority): "default" | "secondary" | "destructive" | "outline" => {
+    switch (priority) {
+      case BugPriority.CRITICAL:
+        return "destructive";
+      case BugPriority.HIGH:
+        return "destructive";
+      case BugPriority.MEDIUM:
+        return "default";
+      case BugPriority.LOW:
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
+  // Get badge variant for status
+  const getStatusBadgeVariant = (status: BugStatus): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case BugStatus.OPEN:
+        return "destructive";
+      case BugStatus.IN_PROGRESS:
+        return "default";
+      case BugStatus.RESOLVED:
+        return "secondary";
+      case BugStatus.CLOSED:
+        return "outline";
+      default:
+        return "outline";
+    }
+  };
+
+  // Format relative time
+  const formatRelativeTime = (date: string): string => {
+    const now = new Date();
+    const bugDate = new Date(date);
+    const diffMs = now.getTime() - bugDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return diffMins <= 1 ? '1 minute ago' : `${diffMins} minutes ago`;
+    } else if (diffHours < 24) {
+      return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+    } else if (diffDays < 30) {
+      return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+    } else {
+      return bugDate.toLocaleDateString();
+    }
   };
 
   // Filter bugs based on selected filters
@@ -159,7 +174,7 @@ export default function BugsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Bugs</h1>
+            <h1 className="text-3xl font-bold tracking-tight">All Bugs</h1>
             <p className="text-muted-foreground mt-1">
               Manage and track all reported bugs
             </p>
@@ -212,7 +227,7 @@ export default function BugsPage() {
           Showing {filteredBugs.length} of {bugs.length} bugs
         </div>
 
-        {/* Bug list */}
+        {/* Bug table */}
         {filteredBugs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <p className="text-muted-foreground">No bugs found</p>
@@ -221,17 +236,64 @@ export default function BugsPage() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredBugs.map((bug) => (
-              <BugCard
-                key={bug._id}
-                bug={bug}
-                commentCount={commentCounts[bug._id] || 0}
-                assignedUserName={bug.assignedTo ? getUserName(bug.assignedTo) : undefined}
-                onStatusUpdate={handleStatusUpdate}
-                onViewDetails={handleViewDetails}
-              />
-            ))}
+          <div className="bg-card rounded-lg border">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Title</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Project</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Priority</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Assignee</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBugs.map((bug) => (
+                    <tr 
+                      key={bug._id} 
+                      className="border-b last:border-b-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => handleViewDetails(bug._id)}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-foreground">{bug.title}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm text-muted-foreground">{getProjectName(bug.projectId)}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={getPriorityBadgeVariant(bug.priority)}>
+                          {bug.priority}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={getStatusBadgeVariant(bug.status)}>
+                          {bug.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {bug.assignedTo ? (
+                            <>
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+                                {getUserName(bug.assignedTo).charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-sm">{getUserName(bug.assignedTo)}</span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Unassigned</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {formatRelativeTime(bug.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
